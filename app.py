@@ -1,7 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
-from deepface import DeepFace
-from PIL import Image
+import face_recognition
 import numpy as np
+from PIL import Image
 import io
 
 app = FastAPI()
@@ -9,9 +9,6 @@ app = FastAPI()
 @app.post("/get-embedding")
 async def get_embedding(file: UploadFile = File(...)):
     try:
-        if file.content_type not in ["image/jpeg", "image/png", "image/jpg"]:
-            return {"error": "Only JPG and PNG images allowed"}
-
         contents = await file.read()
 
         if len(contents) > 2 * 1024 * 1024:
@@ -20,23 +17,18 @@ async def get_embedding(file: UploadFile = File(...)):
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         image = np.array(image)
 
-        embeddings = DeepFace.represent(
-            img_path=image,
-            model_name="Facenet",
-            detector_backend="opencv",
-            enforce_detection=True
-        )
+        locations = face_recognition.face_locations(image)
 
-        if not embeddings or len(embeddings) == 0:
+        if len(locations) == 0:
             return {"error": "No face detected"}
 
-        if len(embeddings) > 1:
-            return {"error": "Multiple faces detected. Only one allowed"}
+        if len(locations) > 1:
+            return {"error": "Multiple faces detected"}
 
-        embedding = embeddings[0]["embedding"]
+        encodings = face_recognition.face_encodings(image, locations)
 
-        return {"embedding": embedding}
+        return {"embedding": encodings[0].tolist()}
 
     except Exception as e:
-        print("Face API Error:", e)
+        print("Error:", e)
         return {"error": "Processing failed"}
