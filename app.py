@@ -9,6 +9,9 @@ app = FastAPI()
 @app.post("/get-embedding")
 async def get_embedding(file: UploadFile = File(...)):
     try:
+        if file.content_type not in ["image/jpeg", "image/png", "image/jpg"]:
+            return {"error": "Only JPG and PNG images allowed"}
+
         contents = await file.read()
 
         if len(contents) > 2 * 1024 * 1024:
@@ -17,18 +20,29 @@ async def get_embedding(file: UploadFile = File(...)):
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         image = np.array(image)
 
-        locations = face_recognition.face_locations(image)
+        face_locations = face_recognition.face_locations(image)
 
-        if len(locations) == 0:
+        if len(face_locations) == 0:
             return {"error": "No face detected"}
 
-        if len(locations) > 1:
-            return {"error": "Multiple faces detected"}
+        if len(face_locations) > 1:
+            return {"error": "Multiple faces detected. Only one allowed"}
 
-        encodings = face_recognition.face_encodings(image, locations)
+        encodings = face_recognition.face_encodings(image, face_locations)
 
-        return {"embedding": encodings[0].tolist()}
+        if len(encodings) == 0:
+            return {"error": "No face detected"}
+
+        if len(encodings) > 1:
+            return {"error": "Multiple faces detected. Only one allowed"}
+
+        embedding = encodings[0]
+
+        if len(embedding) != 128:
+            return {"error": "Invalid embedding generated"}
+
+        return {"embedding": embedding.tolist()}
 
     except Exception as e:
-        print("Error:", e)
+        print("Face API Error:", e)
         return {"error": "Processing failed"}
